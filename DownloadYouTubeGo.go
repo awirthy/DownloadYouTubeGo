@@ -859,7 +859,7 @@ func NotifyYouTube(sMediaFolder string, Config string, pName string, pDownloadAr
 func main() {
 	// name := "Go Developers"
 	// log.Println("Hello World:", name)
-	xmlFile, err := os.Open("settings.xml")
+	xmlFile, err := os.Open("/config/settings.xml")
 	// xmlFile, err := os.Open("settingsLOCAL.xml")
 	if err != nil {
 		log.Println(err)
