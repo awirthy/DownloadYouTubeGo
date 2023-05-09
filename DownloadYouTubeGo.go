@@ -27,6 +27,7 @@ type settings struct {
 	HTTPHost          string
 	Config            string
 	PlaylistItems     string
+	PushoverUserToken string
 	PodcastDownload   []YouTubeDownload `xml:"PodcastDownload"`
 	PodcastsNotifty   []PodcastsNotifty `xml:"PodcastsNotifty"`
 	RSSDownload       []RSSDownload     `xml:"RSSDownload"`
@@ -71,6 +72,7 @@ type Validate struct {
 	PodcastDownload_FileFormat      bool
 	PodcastDownload_FileQuality     bool
 	PlaylistItems                   bool
+	PushoverUserToken               bool
 	PodcastDownload_YouTubeURL      bool
 	PodcastsNotifty_Name            bool
 	PodcastsNotifty_YouTubeURL      bool
@@ -79,8 +81,11 @@ type Validate struct {
 	RSSDownload_DownloadArchive     bool
 	RSSDownload_FileFormat          bool
 	RSSDownload_FileQuality         bool
+	RSSDownload_PushoverAppToken    bool
+	HTTPHost                        bool
 	TikTokUsername                  bool
 	TikTokFeed                      bool
+	TikTok_PushoverAppToken         bool
 }
 
 type YouTubeDownload struct {
@@ -91,6 +96,8 @@ type YouTubeDownload struct {
 	FileQuality      string `xml:"FileQuality"`
 	ChannelThumbnail string `xml:"ChannelThumbnail"`
 	YouTubeURL       string `xml:"YouTubeURL"`
+	PushoverAppToken string `xml:"PushoverAppToken"`
+	// PushoverAppToken
 }
 
 // RSSDownload Name="jimmyrees (TikTok)" ChannelID="TikTok" TikTokUsername="jimmyrees" FileFormat="mp4" DownloadArchive="/config/youtube-dl-archive-TikTok-ALL.txt" FileQuality="best" ChannelThumbnail="https://www.tiktok.com/favicon.ico" TikTokFeed="http://10.0.0.186:3008/?action=display&amp;bridge=TikTokBridge&amp;format=Atom&amp;context=By+user&amp;username=%40" />
@@ -104,11 +111,13 @@ type RSSDownload struct {
 	ChannelThumbnail string `xml:"ChannelThumbnail"`
 	YouTubeURL       string `xml:"YouTubeURL"`
 	TikTokFeed       string `xml:"TikTokFeed"`
+	PushoverAppToken string `xml:"PushoverAppToken"`
 }
 
 type PodcastsNotifty struct {
-	Name       string `xml:"Name"`
-	YouTubeURL string `xml:"YouTubeURL"`
+	Name             string `xml:"Name"`
+	YouTubeURL       string `xml:"YouTubeURL"`
+	PushoverAppToken string `xml:"PushoverAppToken"`
 }
 
 type JsonData struct {
@@ -128,23 +137,50 @@ type JsonChannelData struct {
 	description string
 }
 
-// type JsonDataMap struct {
-// 	Items map[string]map[string]interface{} `json:"thumbnails"`
-// }
+func isOlderThan(t time.Time) bool {
+	return time.Now().Sub(t) > 168*time.Hour
+}
+
+func DeleteOldFiles(dir string) {
+	descfiles, descerr := WalkMatch(dir, "*.description")
+
+	if descerr != nil {
+		log.Printf("------------------      START List description Files ERROR")
+		log.Fatal(descerr)
+		log.Printf("------------------      END List description Files ERROR")
+	}
+
+	for _, fname := range descfiles {
+		arrfname_noext := strings.Split(fname, ".")
+		fname_noext := arrfname_noext[0]
+
+		log.Printf("fname:" + fname)
+		log.Printf("fname_noext:" + fname_noext)
+
+		fname_file, fname_fileerr := os.Stat(fname)
+
+		if fname_fileerr != nil {
+			log.Printf("------------------      START List fname_fileerr ERROR")
+			log.Fatal(fname_fileerr)
+			log.Printf("------------------      END List fname_fileerr ERROR")
+		}
+
+		if isOlderThan(fname_file.ModTime()) {
+			log.Printf("DELETE FILE: " + fname_noext + ".description")
+			os.Remove(fname_noext + ".description")
+			log.Printf("DELETE FILE: " + fname_noext + ".mp4")
+			os.Remove(fname_noext + ".mp4")
+			log.Printf("DELETE FILE: " + fname_noext + ".info.json")
+			os.Remove(fname_noext + ".info.json")
+		}
+	}
+}
 
 func IsValid(fp string) bool {
 	// Check if file already exists
 	if _, err := os.Stat(fp); err == nil {
 		return true
 	}
-
-	// // Attempt to create it
-	// var d []byte
-	// if err := ioutil.WriteFile(fp, d, 0644); err == nil {
-	// 	os.Remove(fp) // And delete it
-	// 	return true
-	// }
-
 	return false
 }
 
@@ -255,6 +291,18 @@ func NotifyPushover(Config string, AppToken string, UserToken string, nTitle str
 	log.Println("-----		START NotifyPushover")
 	log.Println("-----		")
 
+	// ~~~~~~~~~~~~~~ Print Data ~~~~~~~~~~~~~~~~
+
+	log.Printf("------------------      START Print Data ERROR")
+	log.Printf("Config: " + Config)
+	log.Printf("AppToken: " + AppToken)
+	log.Printf("UserToken: " + UserToken)
+	log.Printf("nTitle: " + nTitle)
+	log.Printf("nBody: " + nBody)
+	log.Printf("pThumbnail: " + pThumbnail)
+	log.Printf("nURL: " + nURL)
+	log.Printf("------------------      END Print Data ERROR")
+
 	// ~~~~~~~~~~ Download Thumbnail ~~~~~~~~~~~~
 
 	savename := ""
@@ -272,32 +320,54 @@ func NotifyPushover(Config string, AppToken string, UserToken string, nTitle str
 
 	err := DownloadFile(Config+savename, pThumbnail)
 	if err != nil {
-		panic(err)
+		// panic(err)
+		log.Printf("------------------      START DownloadFile ERROR")
+		log.Fatal(err.Error())
+		log.Printf("------------------      END DownloadFile ERROR")
 	}
 	fmt.Println("Downloaded: " + pThumbnail)
 
 	// ~~~~~~~~~~~~~~ HTTP Post ~~~~~~~~~~~~~~~~~
 
-	out, err := exec.Command("curl", "-s", "--form-string", "token="+AppToken, "--form-string", "user="+UserToken, "--form-string", "title="+nTitle, "--form-string", "message="+nBody, "--form-string", "html=1", "-F", "attachment=@"+Config+savename, "https://api.pushover.net/1/messages.json").Output()
+	out := exec.Command("curl", "-s", "--form-string", "token="+AppToken, "--form-string", "user="+UserToken, "--form-string", "title="+nTitle, "--form-string", "message="+nBody, "--form-string", "html=1", "-F", "attachment=@"+Config+savename, "https://api.pushover.net/1/messages.json")
+	out.Stdout = os.Stdout
+	out.Stderr = os.Stderr
 
-	if err != nil {
+	if err := out.Run(); err != nil {
 		log.Printf("------------------      START NotifyPushover ERROR")
-		// log.Printf("%s", err)
-		log.Fatal(err)
+		log.Fatal(err.Error())
 		log.Printf("------------------      END NotifyPushover ERROR")
 	}
-	log.Println("Command Successfully Executed")
-	output := string(out[:])
-	log.Println(output)
 
 	log.Println("-----		END NotifyPushover")
 }
 
-func Run_YTDLP(sMediaFolder string, sRSSFolder string, RSSTemplate string, HTTPHost string, Config string, pName string, pChannelID string, pFileFormat string, pDownloadArchive string, pFileQuality string, pChannelThumbnail string, PlaylistItems string, pYouTubeURL string) {
+func Run_YTDLP(sMediaFolder string, sRSSFolder string, RSSTemplate string, HTTPHost string, Config string, pName string, pChannelID string, pFileFormat string, pDownloadArchive string, pFileQuality string, pChannelThumbnail string, PlaylistItems string, pYouTubeURL string, pPushoverAppToken string, pPushoverUserToken string) {
 	log.Println("-----		")
 	log.Println("-----		Start Run_YTDLP")
 	log.Println("-----		")
 	// "yt-dlp -v -o /mnt/pve/NFS_1TB/SCRIPTS/DownloadYouTube-Go/podcasts/%%(id)s.%%(ext)s --write-info-json --no-write-playlist-metafiles --playlist-items 1,2 --restrict-filenames --add-metadata --merge-output-format mp4 --format best --abort-on-error --abort-on-unavailable-fragment --no-overwrites --continue --write-description https://www.youtube.com/playlist?list=PLNJTvO4HBij-As-16otoDkTMhSiQ0cyP_"
+
+	// ~~~~~~~~~~~~~~ Print Data ~~~~~~~~~~~~~~~~
+	log.Println("-----		")
+	log.Printf("sMediaFolder: " + sMediaFolder)
+	log.Printf("sRSSFolder: " + sRSSFolder)
+	log.Printf("RSSTemplate: " + RSSTemplate)
+	log.Printf("HTTPHost: " + HTTPHost)
+	log.Printf("Config: " + Config)
+	log.Printf("pName: " + pName)
+	log.Printf("pChannelID: " + pChannelID)
+	log.Printf("pFileFormat: " + pFileFormat)
+	log.Printf("pDownloadArchive: " + pDownloadArchive)
+	log.Printf("pFileQuality: " + pFileQuality)
+	log.Printf("pChannelThumbnail: " + pChannelThumbnail)
+	log.Printf("PlaylistItems: " + PlaylistItems)
+	log.Printf("pYouTubeURL: " + pYouTubeURL)
+	log.Printf("pPushoverAppToken: " + pPushoverAppToken)
+	log.Printf("pPushoverUserToken: " + pPushoverUserToken)
+	log.Println("-----		")
+
+	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	if pChannelID != "TikTok" {
 		// =========================================================
@@ -305,42 +375,44 @@ func Run_YTDLP(sMediaFolder string, sRSSFolder string, RSSTemplate string, HTTPH
 		// =========================================================
 
 		dlname := pChannelID + "/" + pChannelID + ".%(ext)s"
-		out, err := exec.Command("yt-dlp", "-v", "-o", fmt.Sprintf("%s/%s", sMediaFolder, dlname), "--playlist-items", "0", "--write-info-json", "--restrict-filenames", "--add-metadata", "--merge-output-format", pFileFormat, "--format", pFileQuality, "--abort-on-error", "--abort-on-unavailable-fragment", "--no-overwrites", "--continue", pYouTubeURL).Output()
-		// bashcmd3 = "yt-dlp -v -o " + sMediaFolder + pChannelID + "/" + pChannelID + ".%(ext)s --write-info-json --playlist-items 0 --restrict-filenames --add-metadata --merge-output-format " + pFileFormat + " --format " + pFileQuality + " --abort-on-error --abort-on-unavailable-fragment --no-overwrites --continue " + pYouTubeURL
-		// if there is an error with our execution
-		// handle it here
-		if err != nil {
-			// print ('------------------      START YT-DLP ERROR\n')
-			log.Printf("------------------      START YT-DLP ERROR")
-			// log.Printf("%s", err)
-			log.Fatal(err)
-			log.Printf("------------------      END YT-DLP ERROR")
+
+		log.Println("-----		")
+		log.Println("-----		Start Download Channel JSON Only")
+		log.Println("-----		")
+
+		// out, err := exec.Command("yt-dlp", "-v", "-o", fmt.Sprintf("%s/%s", sMediaFolder, dlname), "--playlist-items", "0", "--write-info-json", "--restrict-filenames", "--add-metadata", "--merge-output-format", pFileFormat, "--format", pFileQuality, "--abort-on-error", "--abort-on-unavailable-fragment", "--no-overwrites", "--continue", pYouTubeURL).Output()
+
+		out := exec.Command("yt-dlp", "-v", "-o", sMediaFolder+dlname, "--playlist-items", "0", "--write-info-json", "--restrict-filenames", "--add-metadata", "--merge-output-format", pFileFormat, "--format", pFileQuality, "--abort-on-error", "--abort-on-unavailable-fragment", "--no-overwrites", "--continue", pYouTubeURL)
+		out.Stdout = os.Stdout
+		out.Stderr = os.Stderr
+
+		if err := out.Run(); err != nil {
+			log.Printf("------------------      START YT-DLP Channel JSON Only ERROR")
+			log.Fatal(err.Error())
+			log.Printf("------------------      END YT-DLP Channel JSON Only ERROR")
+
 		}
-		// as the out variable defined above is of type []byte we need to convert
-		// this to a string or else we will see garbage printed out in our console
-		// this is how we convert it to a string
-		log.Println("Command Successfully Executed")
-		output := string(out[:])
-		log.Println(output)
 	}
 	// =========================================================
 	// ============= Download Videos with yt-dlp ===============
 	// =========================================================
 
 	dlname2 := pChannelID + "/" + "%(id)s.%(ext)s"
-	out2, err2 := exec.Command("yt-dlp", "-v", "-o", fmt.Sprintf("%s/%s", sMediaFolder, dlname2), "--playlist-items", PlaylistItems, "--write-info-json", "--no-write-playlist-metafiles", "--download-archive", pDownloadArchive, "--restrict-filenames", "--add-metadata", "--merge-output-format", pFileFormat, "--format", pFileQuality, "--abort-on-error", "--abort-on-unavailable-fragment", "--no-overwrites", "--continue", "--write-description", pYouTubeURL).Output()
-	// --download-archive " + pDownloadArchive + "
 
-	if err2 != nil {
+	log.Println("-----		")
+	log.Println("-----		Download Videos with yt-dlp")
+	log.Println("-----		")
+
+	out2 := exec.Command("yt-dlp", "-v", "-o", sMediaFolder+dlname2, "--playlist-items", PlaylistItems, "--write-info-json", "--no-write-playlist-metafiles", "--download-archive", pDownloadArchive, "--restrict-filenames", "--add-metadata", "--merge-output-format", pFileFormat, "--format", pFileQuality, "--abort-on-error", "--abort-on-unavailable-fragment", "--no-overwrites", "--continue", "--write-description", pYouTubeURL)
+	out2.Stdout = os.Stdout
+	out2.Stderr = os.Stderr
+
+	if err := out2.Run(); err != nil {
 		log.Printf("------------------      START YT-DLP ERROR")
-		// log.Printf("%s", err2)
-		log.Fatal(err2)
+		log.Fatal(err.Error())
 		log.Printf("------------------      END YT-DLP ERROR")
-	}
 
-	log.Println("Command Successfully Executed")
-	output2 := string(out2[:])
-	log.Println(output2)
+	}
 
 	// =========================================================
 	// ================ List Downloaded Files ==================
@@ -614,13 +686,13 @@ func Run_YTDLP(sMediaFolder string, sRSSFolder string, RSSTemplate string, HTTPH
 				// =========================================================
 
 				// NotifyPushover("apb75jkyb1iegxzp4styr5tgidq3fg","RSS Podcast Downloaded (" + pName + ")","<html><body>" + ytvideo_title + "<br /><br />--------------------------------------------<br /><br />" + ytvideo_description + "</body></html>",ytvideo_thumbnail)
-				NotifyPushover(Config, "apb75jkyb1iegxzp4styr5tgidq3fg", "ZLzrC79W0yAeoj5f4Jz0P3EZbHJKAB", "RSS Podcast Downloaded ("+pName+")", "<html><body>"+jsonpayload.title+"<br /><br />--------------------------------------------<br /><br />"+jsonpayload.description+"</body></html>", jsonpayload.thumbnail, jsonpayload.webpage_url)
+				NotifyPushover(Config, pPushoverAppToken, pPushoverUserToken, "RSS Podcast Downloaded ("+pName+")", "<html><body>"+jsonpayload.title+"<br /><br />--------------------------------------------<br /><br />"+jsonpayload.description+"</body></html>", jsonpayload.thumbnail, jsonpayload.webpage_url)
 			}
 		}
 	}
 }
 
-func NotifyYouTube(sMediaFolder string, Config string, pName string, pDownloadArchive string, PlaylistItems string, pYouTubeURL string) {
+func NotifyYouTube(sMediaFolder string, Config string, pName string, pDownloadArchive string, PlaylistItems string, pYouTubeURL string, pPushoverAppToken string, pPushoverUserToken string) {
 
 	log.Println("-----		")
 	log.Println("-----		Start NotifyYouTube")
@@ -631,17 +703,17 @@ func NotifyYouTube(sMediaFolder string, Config string, pName string, pDownloadAr
 	// =========================================================
 
 	dlname2 := "%(id)s.%(ext)s"
-	out2, err2 := exec.Command("yt-dlp", "-v", "-o", fmt.Sprintf("%s/%s", sMediaFolder, dlname2), "--skip-download", "--playlist-items", PlaylistItems, "--write-info-json", "--no-write-playlist-metafiles", "--download-archive", pDownloadArchive, "--restrict-filenames", "--add-metadata", "--merge-output-format", "mp4", "--format", "best", "--abort-on-error", "--abort-on-unavailable-fragment", "--no-overwrites", "--continue", "--write-description", pYouTubeURL).Output()
 
-	if err2 != nil {
-		log.Printf("------------------      START YT-DLP ERROR")
-		log.Fatal(err2)
-		log.Printf("------------------      END YT-DLP ERROR")
+	out2 := exec.Command("yt-dlp", "-v", "-o", fmt.Sprintf("%s/%s", sMediaFolder, dlname2), "--skip-download", "--playlist-items", PlaylistItems, "--write-info-json", "--no-write-playlist-metafiles", "--download-archive", pDownloadArchive, "--restrict-filenames", "--add-metadata", "--merge-output-format", "mp4", "--format", "best", "--abort-on-error", "--abort-on-unavailable-fragment", "--no-overwrites", "--continue", "--write-description", pYouTubeURL)
+	out2.Stdout = os.Stdout
+	out2.Stderr = os.Stderr
+
+	if err := out2.Run(); err != nil {
+		log.Printf("------------------      START NotifyYouTube YT-DLP ERROR")
+		log.Fatal(err.Error())
+		log.Printf("------------------      END NotifyYouTube YT-DLP ERROR")
+
 	}
-
-	log.Println("Command Successfully Executed")
-	output2 := string(out2[:])
-	log.Println(output2)
 
 	// =========================================================
 	// ================ List Downloaded Files ==================
@@ -775,7 +847,7 @@ func NotifyYouTube(sMediaFolder string, Config string, pName string, pDownloadAr
 			// =========================================================
 
 			// NotifyPushover("apb75jkyb1iegxzp4styr5tgidq3fg","RSS Podcast Downloaded (" + pName + ")","<html><body>" + ytvideo_title + "<br /><br />--------------------------------------------<br /><br />" + ytvideo_description + "</body></html>",ytvideo_thumbnail)
-			NotifyPushover(Config, "aba5oiapuej79it7yy3hvzo5aqusnj", "ZLzrC79W0yAeoj5f4Jz0P3EZbHJKAB", "RSS YouTube Video Uploaded ("+pName+")", "<html><body>"+jsonpayload.title+"<br /><br />"+jsonpayload.webpage_url+"<br /><br />--------------------------------------------<br /><br />"+jsonpayload.description+"</body></html>", jsonpayload.thumbnail, jsonpayload.webpage_url)
+			NotifyPushover(Config, pPushoverAppToken, pPushoverUserToken, "RSS YouTube Video Uploaded ("+pName+")", "<html><body>"+jsonpayload.title+"<br /><br />"+jsonpayload.webpage_url+"<br /><br />--------------------------------------------<br /><br />"+jsonpayload.description+"</body></html>", jsonpayload.thumbnail, jsonpayload.webpage_url)
 		}
 	}
 }
@@ -787,7 +859,8 @@ func NotifyYouTube(sMediaFolder string, Config string, pName string, pDownloadAr
 func main() {
 	// name := "Go Developers"
 	// log.Println("Hello World:", name)
-	xmlFile, err := os.Open("settings.xml")
+	// xmlFile, err := os.Open("settings.xml")
+	xmlFile, err := os.Open("settingsLOCAL.xml")
 	if err != nil {
 		log.Println(err)
 	}
@@ -808,6 +881,7 @@ func main() {
 	log.Println("MediaFolderNotify: " + settingsXML.MediaFolderNotify)
 	log.Println("RSSFolder: " + settingsXML.RSSFolder)
 	log.Println("RSSTemplate: " + settingsXML.RSSTemplate)
+	log.Println("PushoverUserToken: " + settingsXML.PushoverUserToken)
 	log.Println("HTTPHost: " + settingsXML.HTTPHost)
 	log.Println("Config: " + settingsXML.Config)
 
@@ -822,6 +896,24 @@ func main() {
 	validateXML.RSSTemplate = IsValid(settingsXML.RSSTemplate)
 	validateXML.Config = IsValid(settingsXML.Config)
 
+	if settingsXML.PlaylistItems == "" {
+		validateXML.PlaylistItems = false
+	} else {
+		validateXML.PlaylistItems = true
+	}
+
+	if settingsXML.PushoverUserToken == "" {
+		validateXML.PushoverUserToken = false
+	} else {
+		validateXML.PushoverUserToken = true
+	}
+
+	if settingsXML.HTTPHost == "" {
+		validateXML.HTTPHost = false
+	} else {
+		validateXML.HTTPHost = true
+	}
+
 	// =========================================================
 	// =========================================================
 	// =========================================================
@@ -830,7 +922,7 @@ func main() {
 	// ######################## Loop PodcastDownload ##########################
 	// ########################################################################
 
-	if validateXML.MediaFolder == true && validateXML.RSSFolder == true && validateXML.RSSTemplate == true && validateXML.Config == true && validateXML.MediaFolderNotify == true {
+	if validateXML.MediaFolder == true && validateXML.RSSFolder == true && validateXML.RSSTemplate == true && validateXML.Config == true && validateXML.MediaFolderNotify == true && validateXML.PushoverUserToken == true && validateXML.HTTPHost == true && validateXML.PlaylistItems == true {
 		log.Println("-----		")
 		log.Println("-----		Start Validate")
 		log.Println("-----		")
@@ -842,7 +934,7 @@ func main() {
 		// print out the user Type, their name, and their facebook url
 		// as just an example
 		for i := 0; i < len(settingsXML.PodcastDownload); i++ {
-			if settingsXML.PodcastDownload[i].Name == "" && settingsXML.PodcastDownload[i].ChannelID == "" && settingsXML.PodcastDownload[i].ChannelThumbnail == "" && settingsXML.PodcastDownload[i].DownloadArchive == "" && settingsXML.PodcastDownload[i].FileFormat == "" && settingsXML.PodcastDownload[i].FileQuality == "" && settingsXML.PlaylistItems == "" && settingsXML.PodcastDownload[i].YouTubeURL == "" {
+			if settingsXML.PodcastDownload[i].Name == "" && settingsXML.PodcastDownload[i].ChannelID == "" && settingsXML.PodcastDownload[i].ChannelThumbnail == "" && settingsXML.PodcastDownload[i].DownloadArchive == "" && settingsXML.PodcastDownload[i].FileFormat == "" && settingsXML.PodcastDownload[i].FileQuality == "" && settingsXML.PlaylistItems == "" && settingsXML.PodcastDownload[i].YouTubeURL == "" && settingsXML.PodcastDownload[i].PushoverAppToken == "" {
 				validateXML.PodcastDownload_Name = false
 				validateXML.PodcastDownload_ChannelID = false
 				validateXML.PodcastDownload_DownloadArchive = false
@@ -862,7 +954,6 @@ func main() {
 				if validateXML.PodcastDownload_DownloadArchive == true {
 					validateXML.PodcastDownload_Name = true
 					validateXML.PodcastDownload_ChannelID = true
-					// validateXML.PodcastDownload_DownloadArchive = true
 					validateXML.PodcastDownload_FileFormat = true
 					validateXML.PodcastDownload_FileQuality = true
 					validateXML.PodcastDownload_YouTubeURL = true
@@ -907,7 +998,8 @@ func main() {
 				log.Println("PlaylistItems: " + settingsXML.PlaylistItems)
 				log.Println("-----		")
 
-				Run_YTDLP(settingsXML.MediaFolder, settingsXML.RSSFolder, settingsXML.RSSTemplate, settingsXML.HTTPHost, settingsXML.Config, settingsXML.PodcastDownload[i].Name, settingsXML.PodcastDownload[i].ChannelID, settingsXML.PodcastDownload[i].FileFormat, settingsXML.PodcastDownload[i].DownloadArchive, settingsXML.PodcastDownload[i].FileQuality, settingsXML.PodcastDownload[i].ChannelThumbnail, settingsXML.PlaylistItems, settingsXML.PodcastDownload[i].YouTubeURL)
+				Run_YTDLP(settingsXML.MediaFolder, settingsXML.RSSFolder, settingsXML.RSSTemplate, settingsXML.HTTPHost, settingsXML.Config, settingsXML.PodcastDownload[i].Name, settingsXML.PodcastDownload[i].ChannelID, settingsXML.PodcastDownload[i].FileFormat, settingsXML.PodcastDownload[i].DownloadArchive, settingsXML.PodcastDownload[i].FileQuality, settingsXML.PodcastDownload[i].ChannelThumbnail, settingsXML.PlaylistItems, settingsXML.PodcastDownload[i].YouTubeURL, settingsXML.PodcastDownload[i].PushoverAppToken, settingsXML.PushoverUserToken)
+				DeleteOldFiles(settingsXML.MediaFolder + settingsXML.PodcastDownload[i].ChannelID + "/")
 				log.Println("")
 			}
 		}
@@ -920,7 +1012,7 @@ func main() {
 	// ######################## Loop PodcastsNotifty ##########################
 	// ########################################################################
 
-	if validateXML.MediaFolder == true && validateXML.RSSFolder == true && validateXML.RSSTemplate == true && validateXML.Config == true && validateXML.MediaFolderNotify == true {
+	if validateXML.MediaFolder == true && validateXML.RSSFolder == true && validateXML.RSSTemplate == true && validateXML.Config == true && validateXML.MediaFolderNotify == true && validateXML.PushoverUserToken == true && validateXML.HTTPHost == true && validateXML.PlaylistItems == true {
 		log.Println("-----		")
 		log.Println("-----		Start PodcastsNotifty")
 		log.Println("-----		")
@@ -932,34 +1024,18 @@ func main() {
 		// print out the user Type, their name, and their facebook url
 		// as just an example
 		for i := 0; i < len(settingsXML.PodcastsNotifty); i++ {
-			if settingsXML.PodcastsNotifty[i].Name == "" && settingsXML.PodcastsNotifty[i].YouTubeURL == "" {
+			if settingsXML.PodcastsNotifty[i].Name == "" && settingsXML.PodcastsNotifty[i].YouTubeURL == "" && settingsXML.PodcastsNotifty[i].PushoverAppToken == "" {
 				validateXML.PodcastsNotifty_Name = false
-				// validateXML.PodcastDownload_ChannelID = false
-				// validateXML.PodcastDownload_DownloadArchive = false
-				// validateXML.PodcastDownload_FileFormat = false
-				// validateXML.PodcastDownload_FileQuality = false
 				validateXML.PodcastsNotifty_YouTubeURL = false
 				validateXML.PlaylistItems = false
 				log.Println("Not Valid - PodcastsNotifty_Name")
-				// log.Println("Not Valid - PodcastDownload_ChannelID")
-				// log.Println("Not Valid - PodcastDownload_DownloadArchive")
-				// log.Println("ot Valid - PodcastDownload_FileFormat")
-				// log.Println("Not Valid - PodcastDownload_FileQuality")
 				log.Println("Not Valid - PodcastsNotifty_YouTubeURL")
 				log.Println("Not Valid - PlaylistItems")
 			} else {
 				validateXML.PodcastsNotifty_Name = true
-				// validateXML.PodcastDownload_ChannelID = true
-				// validateXML.PodcastDownload_DownloadArchive = true
-				// validateXML.PodcastDownload_FileFormat = true
-				// validateXML.PodcastDownload_FileQuality = true
 				validateXML.PodcastsNotifty_YouTubeURL = true
 				validateXML.PlaylistItems = true
 				log.Println("Valid - PPodcastsNotifty_Name")
-				// log.Println("Valid - PodcastsNotifty_ChannelID")
-				// log.Println("Valid - PodcastsNotifty_DownloadArchive")
-				// log.Println("Valid - PodcastsNotifty_FileFormat")
-				// log.Println("Valid - PodcastsNotifty_FileQuality")
 				log.Println("Valid - PodcastsNotifty_YouTubeURL")
 				log.Println("Valid - PlaylistItems")
 			}
@@ -981,7 +1057,7 @@ func main() {
 				log.Println("PlaylistItems: " + settingsXML.PlaylistItems)
 				log.Println("-----		")
 
-				NotifyYouTube(settingsXML.MediaFolderNotify, settingsXML.Config, settingsXML.PodcastsNotifty[i].Name, settingsXML.Config+"youtube-dl-notify.txt", settingsXML.PlaylistItems, settingsXML.PodcastsNotifty[i].YouTubeURL)
+				NotifyYouTube(settingsXML.MediaFolderNotify, settingsXML.Config, settingsXML.PodcastsNotifty[i].Name, settingsXML.Config+"youtube-dl-notify.txt", settingsXML.PlaylistItems, settingsXML.PodcastsNotifty[i].YouTubeURL, settingsXML.PodcastsNotifty[i].PushoverAppToken, settingsXML.PushoverUserToken)
 				log.Println("")
 			}
 
@@ -995,7 +1071,7 @@ func main() {
 	// ####################### Run YT-DLP for TikTok ##########################
 	// ########################################################################
 
-	if validateXML.MediaFolder == true && validateXML.RSSFolder == true && validateXML.RSSTemplate == true && validateXML.Config == true {
+	if validateXML.MediaFolder == true && validateXML.RSSFolder == true && validateXML.RSSTemplate == true && validateXML.Config == true && validateXML.PushoverUserToken == true && validateXML.HTTPHost == true && validateXML.PlaylistItems == true {
 		log.Println("-----		")
 		log.Println("-----		Start RSSDownload")
 		log.Println("-----		")
@@ -1005,7 +1081,7 @@ func main() {
 		log.Println("Valid - Config")
 
 		for i := 0; i < len(settingsXML.RSSDownload); i++ {
-			if settingsXML.RSSDownload[i].Name == "" && settingsXML.RSSDownload[i].ChannelID == "" && settingsXML.RSSDownload[i].ChannelThumbnail == "" && settingsXML.RSSDownload[i].DownloadArchive == "" && settingsXML.RSSDownload[i].FileFormat == "" && settingsXML.RSSDownload[i].FileQuality == "" && settingsXML.PlaylistItems == "" && settingsXML.RSSDownload[i].TikTokUsername == "" && settingsXML.RSSDownload[i].TikTokFeed == "" {
+			if settingsXML.RSSDownload[i].Name == "" && settingsXML.RSSDownload[i].ChannelID == "" && settingsXML.RSSDownload[i].ChannelThumbnail == "" && settingsXML.RSSDownload[i].DownloadArchive == "" && settingsXML.RSSDownload[i].FileFormat == "" && settingsXML.RSSDownload[i].FileQuality == "" && settingsXML.PlaylistItems == "" && settingsXML.RSSDownload[i].TikTokUsername == "" && settingsXML.RSSDownload[i].TikTokFeed == "" && settingsXML.RSSDownload[i].PushoverAppToken == "" {
 				validateXML.RSSDownload_Name = false
 				validateXML.RSSDownload_ChannelID = false
 				validateXML.RSSDownload_DownloadArchive = false
@@ -1023,22 +1099,33 @@ func main() {
 				log.Println("Not Valid - TikTokFeed")
 				log.Println("Not Valid - PlaylistItems")
 			} else {
-				validateXML.RSSDownload_Name = true
-				validateXML.RSSDownload_ChannelID = true
-				validateXML.RSSDownload_DownloadArchive = true
-				validateXML.RSSDownload_FileFormat = true
-				validateXML.RSSDownload_FileQuality = true
-				validateXML.TikTokUsername = true
-				validateXML.TikTokFeed = true
-				validateXML.PlaylistItems = true
-				log.Println("Valid - RSSDownload_Name")
-				log.Println("Valid - RSSDownload_ChannelID")
-				log.Println("Valid - RSSDownload_DownloadArchive")
-				log.Println("Valid - RSSDownload_FileFormat")
-				log.Println("Valid - RSSDownload_FileQuality")
-				log.Println("Valid - TikTokUsername")
-				log.Println("Valid - TikTokFeed")
-				log.Println("Valid - PlaylistItems")
+				validateXML.RSSDownload_DownloadArchive = IsValid(settingsXML.RSSDownload[i].DownloadArchive)
+				if validateXML.RSSDownload_DownloadArchive == true {
+					validateXML.RSSDownload_Name = true
+					validateXML.RSSDownload_ChannelID = true
+					validateXML.RSSDownload_FileFormat = true
+					validateXML.RSSDownload_FileQuality = true
+					validateXML.TikTokFeed = true
+					validateXML.TikTokUsername = true
+					validateXML.PlaylistItems = true
+					log.Println("Valid - RSSDownload_Name")
+					log.Println("Valid - RSSDownload_ChannelID")
+					log.Println("Valid - RSSDownload_DownloadArchive")
+					log.Println("Valid - RSSDownload_FileFormat")
+					log.Println("Valid - RSSDownload_FileQuality")
+					log.Println("Valid - TikTokFeed")
+					log.Println("Valid - TikTokUsername")
+					log.Println("Valid - PlaylistItems")
+				} else {
+					log.Println("Valid - RSSDownload_Name")
+					log.Println("Valid - RSSDownload_ChannelID")
+					log.Println("Not Valid - RSSDownload_DownloadArchive")
+					log.Println("Valid - RSSDownload_FileFormat")
+					log.Println("Valid - RSSDownload_FileQuality")
+					log.Println("Valid - TikTokFeed")
+					log.Println("Valid - TikTokUsername")
+					log.Println("Valid - PlaylistItems")
+				}
 			}
 
 			validateXML.TikTokFeed = IsValidURL(settingsXML.RSSDownload[i].TikTokFeed + settingsXML.RSSDownload[i].TikTokUsername)
@@ -1131,7 +1218,8 @@ func main() {
 
 					// Run_YTDLP(settingsXML.MediaFolder, settingsXML.Config, settingsXML.RSSDownload[i].Name, settingsXML.RSSDownload[i].DownloadArchive, settingsXML.PlaylistItems, jsonitemspayload.Link)
 
-					Run_YTDLP(settingsXML.MediaFolder, settingsXML.RSSFolder, settingsXML.RSSTemplate, settingsXML.HTTPHost, settingsXML.Config, settingsXML.RSSDownload[i].Name, settingsXML.RSSDownload[i].ChannelID, settingsXML.RSSDownload[i].FileFormat, settingsXML.RSSDownload[i].DownloadArchive, settingsXML.RSSDownload[i].FileQuality, settingsXML.RSSDownload[i].ChannelThumbnail, settingsXML.PlaylistItems, jsonitemspayload.Link)
+					Run_YTDLP(settingsXML.MediaFolder, settingsXML.RSSFolder, settingsXML.RSSTemplate, settingsXML.HTTPHost, settingsXML.Config, settingsXML.RSSDownload[i].Name, settingsXML.RSSDownload[i].ChannelID, settingsXML.RSSDownload[i].FileFormat, settingsXML.RSSDownload[i].DownloadArchive, settingsXML.RSSDownload[i].FileQuality, settingsXML.RSSDownload[i].ChannelThumbnail, settingsXML.PlaylistItems, jsonitemspayload.Link, settingsXML.RSSDownload[i].PushoverAppToken, settingsXML.PushoverUserToken)
+					DeleteOldFiles(settingsXML.MediaFolder + settingsXML.RSSDownload[i].ChannelID + "/")
 				}
 
 				// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1144,9 +1232,6 @@ func main() {
 			// =========================================================
 		}
 	}
-
-	// Run_RSS_YTDLP(Settings_MediaFolder, Podcast_Name, Podcast_ChannelID, Podcast_FileFormat, Podcast_DownloadArchive, Podcast_FileQuality, Podcast_ChannelThumbnail, Podcast_RSSURL)
-	// DeleteOldFiles(7,Settings_MediaFolder + Podcast_ChannelID + "/")
 
 	// ########################################################################
 	// ########################################################################
