@@ -20,12 +20,12 @@ RUN mkdir -p ${GOPATH}/src ${GOPATH}/bin
 RUN export GO111MODULE=on
 RUN cp /usr/share/zoneinfo/Australia/Melbourne /etc/localtime
 RUN echo "Australia/Melbourne" >  /etc/timezone
-RUN wget -O /tmp/DownloadYouTubeGo.tar.gz https://github.com/awirthy/DownloadYouTubeGo/archive/refs/tags/v1.14.tar.gz
+RUN wget -O /tmp/DownloadYouTubeGo.tar.gz https://github.com/awirthy/DownloadYouTubeGo/archive/refs/tags/v1.15.tar.gz
 RUN mkdir -p /opt/DownloadYouTubeGo
 RUN tar zxf /tmp/DownloadYouTubeGo.tar.gz -C /opt/DownloadYouTubeGo
 RUN echo "#!/bin/sh" >> /etc/periodic/15min/DownloadYouTubeGo
-RUN echo "/opt/DownloadYouTubeGo/DownloadYouTubeGo-1.14/DownloadYouTubeGo.sh" >> /etc/periodic/15min/DownloadYouTubeGo
-RUN chmod 755 /opt/DownloadYouTubeGo/DownloadYouTubeGo-1.14/DownloadYouTubeGo.sh
+RUN echo "/opt/DownloadYouTubeGo/DownloadYouTubeGo-1.15/DownloadYouTubeGo.sh" >> /etc/periodic/15min/DownloadYouTubeGo
+RUN chmod 755 /opt/DownloadYouTubeGo/DownloadYouTubeGo-1.15/DownloadYouTubeGo.sh
 RUN chmod 755 /etc/periodic/15min/DownloadYouTubeGo
 CMD ["crond", "-f","-l","8"]
     
