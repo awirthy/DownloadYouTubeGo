@@ -293,7 +293,7 @@ func NotifyPushover(Config string, AppToken string, UserToken string, nTitle str
 
 	// ~~~~~~~~~~~~~~ Print Data ~~~~~~~~~~~~~~~~
 
-	log.Printf("------------------      START Print Data ERROR")
+	log.Printf("------------------      START Print Data")
 	log.Printf("Config: " + Config)
 	log.Printf("AppToken: " + AppToken)
 	log.Printf("UserToken: " + UserToken)
@@ -301,7 +301,7 @@ func NotifyPushover(Config string, AppToken string, UserToken string, nTitle str
 	log.Printf("nBody: " + nBody)
 	log.Printf("pThumbnail: " + pThumbnail)
 	log.Printf("nURL: " + nURL)
-	log.Printf("------------------      END Print Data ERROR")
+	log.Printf("------------------      END Print Data")
 
 	// ~~~~~~~~~~ Download Thumbnail ~~~~~~~~~~~~
 
@@ -685,7 +685,6 @@ func Run_YTDLP(sMediaFolder string, sRSSFolder string, RSSTemplate string, HTTPH
 				// =================== Notify Pushover =====================
 				// =========================================================
 
-				// NotifyPushover("apb75jkyb1iegxzp4styr5tgidq3fg","RSS Podcast Downloaded (" + pName + ")","<html><body>" + ytvideo_title + "<br /><br />--------------------------------------------<br /><br />" + ytvideo_description + "</body></html>",ytvideo_thumbnail)
 				NotifyPushover(Config, pPushoverAppToken, pPushoverUserToken, "RSS Podcast Downloaded ("+pName+")", "<html><body>"+jsonpayload.title+"<br /><br />--------------------------------------------<br /><br />"+jsonpayload.description+"</body></html>", jsonpayload.thumbnail, jsonpayload.webpage_url)
 			}
 		}
@@ -846,7 +845,6 @@ func NotifyYouTube(sMediaFolder string, Config string, pName string, pDownloadAr
 			// =================== Notify Pushover =====================
 			// =========================================================
 
-			// NotifyPushover("apb75jkyb1iegxzp4styr5tgidq3fg","RSS Podcast Downloaded (" + pName + ")","<html><body>" + ytvideo_title + "<br /><br />--------------------------------------------<br /><br />" + ytvideo_description + "</body></html>",ytvideo_thumbnail)
 			NotifyPushover(Config, pPushoverAppToken, pPushoverUserToken, "RSS YouTube Video Uploaded ("+pName+")", "<html><body>"+jsonpayload.title+"<br /><br />"+jsonpayload.webpage_url+"<br /><br />--------------------------------------------<br /><br />"+jsonpayload.description+"</body></html>", jsonpayload.thumbnail, jsonpayload.webpage_url)
 		}
 	}
@@ -913,6 +911,16 @@ func main() {
 	} else {
 		validateXML.HTTPHost = true
 	}
+
+	// ~~~~~~~~ Print Validation Data ~~~~~~~~~~~
+
+	log.Println("MediaFolder Valid: " + fmt.Sprint(validateXML.MediaFolder))
+	log.Println("RSSFolder Valid: " + fmt.Sprint(validateXML.RSSFolder))
+	log.Println("Config Valid: " + fmt.Sprint(validateXML.Config))
+	log.Println("MediaFolderNotify Valid: " + fmt.Sprint(validateXML.MediaFolderNotify))
+	log.Println("PushoverUserToken Valid: " + fmt.Sprint(validateXML.PushoverUserToken))
+	log.Println("HTTPHost Valid: " + fmt.Sprint(validateXML.HTTPHost))
+	log.Println("PlaylistItems Valid: " + fmt.Sprint(validateXML.PlaylistItems))
 
 	// =========================================================
 	// =========================================================

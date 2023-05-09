@@ -1,5 +1,5 @@
 # /etc/cron.d/ytdl
 # 
 # go run TEST-Go.go
-go run /opt/DownloadYouTubeGo/DownloadYouTubeGo-1.12/DownloadYouTubeGo.go  >> /proc/1/fd/1;
+go run /opt/DownloadYouTubeGo/DownloadYouTubeGo-1.13/DownloadYouTubeGo.go  >> /proc/1/fd/1;
 echo "DONE"  >> /proc/1/fd/1;
