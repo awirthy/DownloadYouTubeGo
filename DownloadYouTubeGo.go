@@ -841,6 +841,19 @@ func NotifyYouTube(sMediaFolder string, Config string, pName string, pDownloadAr
 			os.Remove(fname_description)
 			os.Remove(fname_json)
 
+			// ~~~~~~~~~~~~ Add to Archive ~~~~~~~~~~~~~~
+
+			arch, archerr := os.OpenFile(pDownloadArchive, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 644)
+
+			if archerr != nil {
+				log.Printf(archerr.Error())
+			}
+			defer arch.Close()
+
+			if _, err := arch.WriteString("youtube " + jsonpayload.id + "\n"); err != nil {
+				log.Fatal(err)
+			}
+
 			// =========================================================
 			// =================== Notify Pushover =====================
 			// =========================================================
