@@ -674,6 +674,9 @@ func Run_YTDLP(sMediaFolder string, sRSSFolder string, RSSTemplate string, HTTPH
 				// ~~~~~~~~~ Replace & in string ~~~~~~~~~~~~
 				jsonpayload_thumbnail_amp := strings.ReplaceAll(jsonpayload.thumbnail, "&", "&amp;")
 
+				// ~~~~~ Replace invalid tiktok data ~~~~~~~~
+				jsonpayload.channel_url = pYouTubeURL
+
 				// ----- RSS Item Data -------
 				RSSItemsData := "\t\t<item>\n\t\t\t<title><![CDATA[" + jsonpayload.title + "]]></title>\n\t\t\t<description><![CDATA[" + jsonpayload.description + "]]></description>\n\t\t\t<link>" + jsonpayload.webpage_url + "</link>\n\t\t\t<guid isPermaLink=\"false\">" + jsonpayload.webpage_url + "</guid>\n\t\t\t<pubDate>" + PubDate + "</pubDate>\n\t\t\t<podcast:chapters url=\"[ITEM_CHAPTER_URL]\" type=\"application/json\"/>\n\t\t\t<itunes:subtitle><![CDATA[" + jsonpayload.uploader_url + "]]></itunes:subtitle>\n\t\t\t<itunes:summary><![CDATA[" + jsonpayload.uploader_url + "]]></itunes:summary>\n\t\t\t<itunes:author><![CDATA[" + jsonpayload.uploader_url + "]]></itunes:author>\n\t\t\t<author><![CDATA[" + jsonpayload.uploader_url + "]]></author>\n\t\t\t<itunes:image href=\"" + jsonpayload_thumbnail_amp + "\"/>\n\t\t\t<itunes:explicit>No</itunes:explicit>\n\t\t\t<itunes:keywords>youtube</itunes:keywords>\n\t\t\t<enclosure url=\"" + HTTPHost + "podcasts/" + pChannelID + "/" + jsonpayload.id + ".mp4" + "\" type=\"video/mpeg\" length=\"" + jsonpayload.duration_string + "\"/>\n\t\t\t<podcast:person href=\"" + jsonpayload.channel_url + "\" img=\"" + jsonpayload_thumbnail_amp + "\">" + jsonpayload.uploader_url + "</podcast:person>\n\t\t\t<podcast:images srcset=\"" + jsonpayload_thumbnail_amp + " 2000w\"/>\n\t\t\t<itunes:duration>" + jsonpayload.duration_string + "</itunes:duration>\n\t\t</item>\n<!-- INSERT_ITEMS_HERE -->"
 				RSSData = strings.ReplaceAll(RSSData, "<!-- INSERT_ITEMS_HERE -->", RSSItemsData)
